@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    
+    <meta charset="utf-8">
+    <title>dao/ComboDAO.js - Documentation</title>
+    
+    
+    <script src="scripts/prettify/prettify.js"></script>
+    <script src="scripts/prettify/lang-css.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc.css">
+    <script src="scripts/nav.js" defer></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+
+<input type="checkbox" id="nav-trigger" class="nav-trigger" />
+<label for="nav-trigger" class="navicon-button x">
+  <div class="navicon"></div>
+</label>
+
+<label for="nav-trigger" class="overlay"></label>
+
+<nav >
+    
+    <input type="text" id="nav-search" placeholder="Search" />
+    
+    <h2><a href="index.html">Home</a></h2><h2><a href="https://github.com/CSCE331-Fall2024/project-3-22-ctrl-alt-elite" target="_blank" class="menu-item" id="repository" >GitHub Repository</a></h2><h3>Classes</h3><ul><li><a href="Combo.html">Combo</a></li><li></li><li><a href="Employee.html">Employee</a></li><li></li><li><a href="global.html#InventoryItem">InventoryItem</a></li><li></li><li><a href="MenuItem.html">MenuItem</a></li><li></li><li><a href="MenuItemIngredient.html">MenuItemIngredient</a></li><li></li><li><a href="Order.html">Order</a></li><li></li><li><a href="OrderComboItem.html">OrderComboItem</a></li><li></li><li><a href="OrderItem.html">OrderItem</a></li><li></li></ul><h3>Modules</h3><ul><li><a href="module-comboRoutes.html">comboRoutes</a></li><li><a href="module-db.html">db</a></li><li><a href="module-employeeRoutes.html">employeeRoutes</a></li><li><a href="module-inventoryReportRoutes.html">inventoryReportRoutes</a></li><li><a href="module-menuItemRoutes.html">menuItemRoutes</a></li><li><a href="module-orderRoutes.html">orderRoutes</a></li><li><a href="module-reportRoutes.html">reportRoutes</a></li><li><a href="module-salesRoutes.html">salesRoutes</a></li><li><a href="module-speechOrderRoutes.html">speechOrderRoutes</a></li></ul><h3>Events</h3><ul><li><a href="global.html#event:connection">connection</a></li><li><a href="global.html#event:disconnect">disconnect</a></li></ul><h3>Global</h3><ul><li><a href="global.html#ComboDAO">ComboDAO</a></li><li><a href="global.html#EmployeeDAO">EmployeeDAO</a></li><li><a href="global.html#InventoryItemDAO">InventoryItemDAO</a></li><li><a href="global.html#MenuItemDAO">MenuItemDAO</a></li><li><a href="global.html#OrderComboItemDAO">OrderComboItemDAO</a></li><li><a href="global.html#OrderDAO">OrderDAO</a></li><li><a href="global.html#OrderItemDAO">OrderItemDAO</a></li><li><a href="global.html#ReportDAO">ReportDAO</a></li><li><a href="global.html#SalesDAO">SalesDAO</a></li><li><a href="global.html#checkIfOrderComplete">checkIfOrderComplete</a></li><li><a href="global.html#enforceComboRules">enforceComboRules</a></li><li><a href="global.html#generateAssistantResponse">generateAssistantResponse</a></li><li><a href="global.html#generateAudioResponse">generateAudioResponse</a></li><li><a href="global.html#getEmailRoleMap">getEmailRoleMap</a></li><li><a href="global.html#getMenuItemCategory">getMenuItemCategory</a></li><li><a href="global.html#middleware">middleware</a></li><li><a href="global.html#parseTranscription">parseTranscription</a></li><li><a href="global.html#processConversation">processConversation</a></li><li><a href="global.html#processOrder">processOrder</a></li><li><a href="global.html#startConversation">startConversation</a></li><li><a href="global.html#transcribeAudio">transcribeAudio</a></li><li><a href="global.html#verifyToken">verifyToken</a></li></ul>
+</nav>
+
+<div id="main">
+    
+    <h1 class="page-title">dao/ComboDAO.js</h1>
+    
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import pool from '../db.js';
+import Combo from '../models/Combo.js';
+
+/**
+ * Data Access Object (DAO) for managing `Combo` entities in the database.
+ */
+const ComboDAO = {
+  /**
+   * Retrieves a combo by its ID if it is active.
+   * @param {number} comboId - The ID of the combo to retrieve.
+   * @returns {Promise&lt;Combo|null>} A promise that resolves to the `Combo` object if found, or `null` if not found.
+   * @throws {Error} Throws an error if the query fails.
+   */
+  async getComboById(comboId) {
+    const query = 'SELECT * FROM combos WHERE combo_id = $1 AND status = \'Active\'';
+    try {
+      const res = await pool.query(query, [comboId]);
+      if (res.rows.length > 0) {
+        const row = res.rows[0];
+        return new Combo(
+          row.combo_id,
+          row.name,
+          row.description,
+          row.price,
+          row.status
+        );
+      } else {
+        return null;
+      }
+    } catch (err) {
+      console.error('Error fetching combo by ID:', err);
+      throw err;
+    }
+  },
+
+  /**
+   * Retrieves a combo by its name if it is active.
+   * @param {string} name - The name of the combo to retrieve.
+   * @returns {Promise&lt;Combo|null>} A promise that resolves to the `Combo` object if found, or `null` if not found.
+   * @throws {Error} Throws an error if the query fails.
+   */
+  async getComboByName(name) {
+    const query = 'SELECT * FROM combos WHERE LOWER(name) = LOWER($1) AND status = \'Active\'';
+    try {
+      const res = await pool.query(query, [name]);
+      if (res.rows.length > 0) {
+        const row = res.rows[0];
+        return new Combo(
+          row.combo_id,
+          row.name,
+          row.description,
+          row.price,
+          row.status
+        );
+      } else {
+        return null;
+      }
+    } catch (err) {
+      console.error('Error fetching combo by name:', err);
+      throw err;
+    }
+  },
+
+  /**
+   * Retrieves all active combos from the database.
+   * @returns {Promise&lt;Combo[]>} A promise that resolves to an array of active `Combo` objects.
+   * @throws {Error} Throws an error if the query fails.
+   */
+  async getAllActiveCombos() {
+    const query = 'SELECT * FROM combos WHERE status = \'Active\'';
+    try {
+      const res = await pool.query(query);
+      return res.rows.map(row => new Combo(
+        row.combo_id,
+        row.name,
+        row.description,
+        row.price,
+        row.status
+      ));
+    } catch (err) {
+      console.error('Error fetching all active combos:', err);
+      throw err;
+    }
+  },
+
+  /**
+   * Adds a new combo to the database.
+   * @param {Combo} combo - The `Combo` object to add.
+   * @returns {Promise&lt;Combo>} A promise that resolves to the newly added `Combo` object with its ID populated.
+   * @throws {Error} Throws an error if the query fails.
+   */
+  async addCombo(combo) {
+    const query = 'INSERT INTO combos (name, description, price, status) VALUES ($1, $2, $3, $4) RETURNING combo_id';
+    try {
+      const res = await pool.query(query, [combo.name, combo.description, combo.price, combo.status]);
+      combo.comboId = res.rows[0].combo_id;
+      return combo;
+    } catch (err) {
+      console.error('Error adding combo:', err);
+      throw err;
+    }
+  },
+
+  /**
+   * Updates an existing combo in the database.
+   * @param {Combo} combo - The `Combo` object with updated fields.
+   * @returns {Promise&lt;Combo>} A promise that resolves to the updated `Combo` object.
+   * @throws {Error} Throws an error if the query fails.
+   */
+  async updateCombo(combo) {
+    const query = 'UPDATE combos SET name = $1, description = $2, price = $3, status = $4 WHERE combo_id = $5';
+    try {
+      await pool.query(query, [combo.name, combo.description, combo.price, combo.status, combo.comboId]);
+      return combo;
+    } catch (err) {
+      console.error('Error updating combo:', err);
+      throw err;
+    }
+  },
+
+  /**
+   * Deletes a combo from the database.
+   * @param {number} comboId - The ID of the combo to delete.
+   * @returns {Promise&lt;void>} A promise that resolves when the combo is deleted.
+   * @throws {Error} Throws an error if the query fails.
+   */
+  async deleteCombo(comboId) {
+    const query = 'DELETE FROM combos WHERE combo_id = $1';
+    try {
+      await pool.query(query, [comboId]);
+    } catch (err) {
+      console.error('Error deleting combo:', err);
+      throw err;
+    }
+  },
+};
+
+export default ComboDAO;
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+    
+    
+</div>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.4</a> using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+</footer>
+
+<script>prettyPrint();</script>
+<script src="scripts/polyfill.js"></script>
+<script src="scripts/linenumber.js"></script>
+
+<script src="scripts/search.js" defer></script>
+
+
+<script src="scripts/collapse.js" defer></script>
+
+
+</body>
+</html>

@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    
+    <meta charset="utf-8">
+    <title>dao/ReportDAO.js - Documentation</title>
+    
+    
+    <script src="scripts/prettify/prettify.js"></script>
+    <script src="scripts/prettify/lang-css.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc.css">
+    <script src="scripts/nav.js" defer></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+
+<input type="checkbox" id="nav-trigger" class="nav-trigger" />
+<label for="nav-trigger" class="navicon-button x">
+  <div class="navicon"></div>
+</label>
+
+<label for="nav-trigger" class="overlay"></label>
+
+<nav >
+    
+    <input type="text" id="nav-search" placeholder="Search" />
+    
+    <h2><a href="index.html">Home</a></h2><h2><a href="https://github.com/CSCE331-Fall2024/project-3-22-ctrl-alt-elite" target="_blank" class="menu-item" id="repository" >GitHub Repository</a></h2><h3>Classes</h3><ul><li><a href="Combo.html">Combo</a></li><li></li><li><a href="Employee.html">Employee</a></li><li></li><li><a href="global.html#InventoryItem">InventoryItem</a></li><li></li><li><a href="MenuItem.html">MenuItem</a></li><li></li><li><a href="MenuItemIngredient.html">MenuItemIngredient</a></li><li></li><li><a href="Order.html">Order</a></li><li></li><li><a href="OrderComboItem.html">OrderComboItem</a></li><li></li><li><a href="OrderItem.html">OrderItem</a></li><li></li></ul><h3>Modules</h3><ul><li><a href="module-comboRoutes.html">comboRoutes</a></li><li><a href="module-db.html">db</a></li><li><a href="module-employeeRoutes.html">employeeRoutes</a></li><li><a href="module-inventoryReportRoutes.html">inventoryReportRoutes</a></li><li><a href="module-menuItemRoutes.html">menuItemRoutes</a></li><li><a href="module-orderRoutes.html">orderRoutes</a></li><li><a href="module-reportRoutes.html">reportRoutes</a></li><li><a href="module-salesRoutes.html">salesRoutes</a></li><li><a href="module-speechOrderRoutes.html">speechOrderRoutes</a></li></ul><h3>Events</h3><ul><li><a href="global.html#event:connection">connection</a></li><li><a href="global.html#event:disconnect">disconnect</a></li></ul><h3>Global</h3><ul><li><a href="global.html#ComboDAO">ComboDAO</a></li><li><a href="global.html#EmployeeDAO">EmployeeDAO</a></li><li><a href="global.html#InventoryItemDAO">InventoryItemDAO</a></li><li><a href="global.html#MenuItemDAO">MenuItemDAO</a></li><li><a href="global.html#OrderComboItemDAO">OrderComboItemDAO</a></li><li><a href="global.html#OrderDAO">OrderDAO</a></li><li><a href="global.html#OrderItemDAO">OrderItemDAO</a></li><li><a href="global.html#ReportDAO">ReportDAO</a></li><li><a href="global.html#SalesDAO">SalesDAO</a></li><li><a href="global.html#checkIfOrderComplete">checkIfOrderComplete</a></li><li><a href="global.html#enforceComboRules">enforceComboRules</a></li><li><a href="global.html#generateAssistantResponse">generateAssistantResponse</a></li><li><a href="global.html#generateAudioResponse">generateAudioResponse</a></li><li><a href="global.html#getEmailRoleMap">getEmailRoleMap</a></li><li><a href="global.html#getMenuItemCategory">getMenuItemCategory</a></li><li><a href="global.html#middleware">middleware</a></li><li><a href="global.html#parseTranscription">parseTranscription</a></li><li><a href="global.html#processConversation">processConversation</a></li><li><a href="global.html#processOrder">processOrder</a></li><li><a href="global.html#startConversation">startConversation</a></li><li><a href="global.html#transcribeAudio">transcribeAudio</a></li><li><a href="global.html#verifyToken">verifyToken</a></li></ul>
+</nav>
+
+<div id="main">
+    
+    <h1 class="page-title">dao/ReportDAO.js</h1>
+    
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import pool from '../db.js';
+
+/**
+ * Data Access Object (DAO) for generating reports (X-Report and Z-Report).
+ */
+const ReportDAO = {
+  /**
+   * Generates the X-Report for a specific date.
+   * The X-Report provides sales data for each hour of the specified day.
+   * @param {string} date - The date for the report (in YYYY-MM-DD format).
+   * @returns {Promise&lt;Array&lt;{hour: number, totalSales: number}>>} A list of hourly sales data.
+   * @throws {Error} Throws an error if the query fails.
+   */
+  async getXReport(date) {
+    const query = `
+      WITH hours AS (
+        SELECT generate_series(0, 23) AS hour
+      )
+      SELECT 
+        h.hour,
+        COALESCE(SUM(o.total_amount), 0) AS total_sales
+      FROM hours h
+      LEFT JOIN orders o
+      ON EXTRACT(HOUR FROM o.order_date) = h.hour
+      AND DATE(o.order_date) = $1
+      GROUP BY h.hour
+      ORDER BY h.hour;
+    `;
+    try {
+      const res = await pool.query(query, [date]);
+      return res.rows.map(row => ({
+        hour: parseInt(row.hour),
+        totalSales: parseFloat(row.total_sales),
+      }));
+    } catch (err) {
+      console.error('Error fetching X report:', err);
+      throw err;
+    }
+  },
+
+  /**
+   * Generates the Z-Report.
+   * The Z-Report provides sales data for each hour since the last Z-Report and resets the report time.
+   * @returns {Promise&lt;Array&lt;{hour: number, totalSales: number}>>} A list of hourly sales data.
+   * @throws {Error} Throws an error if the query fails.
+   */
+  async getZReport() {
+    try {
+      const lastReportTime = await this.getLastZReportTime();
+
+      const query = `
+        SELECT EXTRACT(HOUR FROM order_date) AS hour, SUM(total_amount) AS total_sales
+        FROM orders
+        WHERE order_date > $1
+        GROUP BY EXTRACT(HOUR FROM order_date)
+        ORDER BY hour;
+      `;
+      const res = await pool.query(query, [lastReportTime || '1970-01-01']);
+      const reportData = res.rows.map(row => ({
+        hour: parseInt(row.hour),
+        totalSales: parseFloat(row.total_sales),
+      }));
+
+      const insertReportTimeQuery = 'INSERT INTO z_reports (report_time) VALUES (NOW())';
+      await pool.query(insertReportTimeQuery);
+
+      return reportData;
+    } catch (err) {
+      console.error('Error generating Z report:', err);
+      throw err;
+    }
+  },
+
+  /**
+   * Retrieves the time of the last Z-Report.
+   * @returns {Promise&lt;string|null>} The timestamp of the last Z-Report or null if no Z-Report exists.
+   * @throws {Error} Throws an error if the query fails.
+   */
+  async getLastZReportTime() {
+    const query = 'SELECT MAX(report_time) AS last_report_time FROM z_reports';
+    try {
+      const res = await pool.query(query);
+      return res.rows[0].last_report_time || null;
+    } catch (err) {
+      console.error('Error fetching last Z-Report time:', err);
+      throw err;
+    }
+  },
+};
+
+export default ReportDAO;
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+    
+    
+</div>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.4</a> using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+</footer>
+
+<script>prettyPrint();</script>
+<script src="scripts/polyfill.js"></script>
+<script src="scripts/linenumber.js"></script>
+
+<script src="scripts/search.js" defer></script>
+
+
+<script src="scripts/collapse.js" defer></script>
+
+
+</body>
+</html>

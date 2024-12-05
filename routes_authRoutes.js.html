@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    
+    <meta charset="utf-8">
+    <title>routes/authRoutes.js - Documentation</title>
+    
+    
+    <script src="scripts/prettify/prettify.js"></script>
+    <script src="scripts/prettify/lang-css.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc.css">
+    <script src="scripts/nav.js" defer></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+
+<input type="checkbox" id="nav-trigger" class="nav-trigger" />
+<label for="nav-trigger" class="navicon-button x">
+  <div class="navicon"></div>
+</label>
+
+<label for="nav-trigger" class="overlay"></label>
+
+<nav >
+    
+    <input type="text" id="nav-search" placeholder="Search" />
+    
+    <h2><a href="index.html">Home</a></h2><h2><a href="https://github.com/CSCE331-Fall2024/project-3-22-ctrl-alt-elite" target="_blank" class="menu-item" id="repository" >GitHub Repository</a></h2><h3>Classes</h3><ul><li><a href="Combo.html">Combo</a></li><li></li><li><a href="Employee.html">Employee</a></li><li></li><li><a href="global.html#InventoryItem">InventoryItem</a></li><li></li><li><a href="MenuItem.html">MenuItem</a></li><li></li><li><a href="MenuItemIngredient.html">MenuItemIngredient</a></li><li></li><li><a href="Order.html">Order</a></li><li></li><li><a href="OrderComboItem.html">OrderComboItem</a></li><li></li><li><a href="OrderItem.html">OrderItem</a></li><li></li></ul><h3>Modules</h3><ul><li><a href="module-comboRoutes.html">comboRoutes</a></li><li><a href="module-db.html">db</a></li><li><a href="module-employeeRoutes.html">employeeRoutes</a></li><li><a href="module-inventoryReportRoutes.html">inventoryReportRoutes</a></li><li><a href="module-menuItemRoutes.html">menuItemRoutes</a></li><li><a href="module-orderRoutes.html">orderRoutes</a></li><li><a href="module-reportRoutes.html">reportRoutes</a></li><li><a href="module-salesRoutes.html">salesRoutes</a></li><li><a href="module-speechOrderRoutes.html">speechOrderRoutes</a></li></ul><h3>Events</h3><ul><li><a href="global.html#event:connection">connection</a></li><li><a href="global.html#event:disconnect">disconnect</a></li></ul><h3>Global</h3><ul><li><a href="global.html#ComboDAO">ComboDAO</a></li><li><a href="global.html#EmployeeDAO">EmployeeDAO</a></li><li><a href="global.html#InventoryItemDAO">InventoryItemDAO</a></li><li><a href="global.html#MenuItemDAO">MenuItemDAO</a></li><li><a href="global.html#OrderComboItemDAO">OrderComboItemDAO</a></li><li><a href="global.html#OrderDAO">OrderDAO</a></li><li><a href="global.html#OrderItemDAO">OrderItemDAO</a></li><li><a href="global.html#ReportDAO">ReportDAO</a></li><li><a href="global.html#SalesDAO">SalesDAO</a></li><li><a href="global.html#checkIfOrderComplete">checkIfOrderComplete</a></li><li><a href="global.html#enforceComboRules">enforceComboRules</a></li><li><a href="global.html#generateAssistantResponse">generateAssistantResponse</a></li><li><a href="global.html#generateAudioResponse">generateAudioResponse</a></li><li><a href="global.html#getEmailRoleMap">getEmailRoleMap</a></li><li><a href="global.html#getMenuItemCategory">getMenuItemCategory</a></li><li><a href="global.html#middleware">middleware</a></li><li><a href="global.html#parseTranscription">parseTranscription</a></li><li><a href="global.html#processConversation">processConversation</a></li><li><a href="global.html#processOrder">processOrder</a></li><li><a href="global.html#startConversation">startConversation</a></li><li><a href="global.html#transcribeAudio">transcribeAudio</a></li><li><a href="global.html#verifyToken">verifyToken</a></li></ul>
+</nav>
+
+<div id="main">
+    
+    <h1 class="page-title">routes/authRoutes.js</h1>
+    
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>// backend/routes/authRoutes.js
+
+import express from 'express';
+import { google } from 'googleapis';
+
+const router = express.Router();
+
+const CLIENT_ID = '729550498216-lnjl5daglifccla4vmj87vekp4ag93gm.apps.googleusercontent.com';
+const CLIENT_SECRET = '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';
+// const emailRoleMap = {
+//   'ryan.kerstetter30@gmail.com' : 'manager',
+//   'ryankerstetter@tamu.edu' : 'cashier',
+//   'elijah.blevins@tamu.edu' : 'manager',
+//   'dhnguyen01@tamu.edu' : 'manager',
+//   'julia.arukakkal.1@tamu.edu' : 'manager',
+//   'mhoughton@tamu.edu' : 'manager',
+// }
+
+const OAuth2 = google.auth.OAuth2;
+const oauth2Client = new OAuth2(
+  CLIENT_ID,
+  CLIENT_SECRET,
+  'http://localhost:3000/auth/google/callback'
+);
+
+import { OAuth2Client } from 'google-auth-library';
+const client = new OAuth2Client(CLIENT_ID);
+import pool from '../db.js';
+
+/**
+ * Retrieves a mapping of employee emails to their roles from the database.
+ * @async
+ * @function getEmailRoleMap
+ * @returns {Promise&lt;Object>} An object mapping emails to roles.
+ * @throws Will throw an error if the database query fails.
+ */
+async function getEmailRoleMap() {
+  const query = "SELECT email, role FROM employees";
+  try {
+    const res = await pool.query(query);
+    console.log("Email-role map fetched:", res.rows);
+    return res.rows.reduce((acc, row) => {
+      acc[row.email] = row.role;
+      return acc;
+    }, {});
+  } catch (err) {
+    console.error('Error fetching email-role map:', err);
+    throw err;
+  }
+}
+
+/**
+ * Middleware to verify Google ID tokens and authenticate users.
+ * @function verifyToken
+ * @param {boolean} [requireManager=false] - Whether the route requires the user to have a 'Manager' role.
+ * @returns {Function} An Express middleware function.
+ */
+export function verifyToken(requireManager = false) {
+  /**
+   * Express middleware function to verify token.
+   * @async
+   * @function middleware
+   * @param {object} req - The Express request object.
+   * @param {object} res - The Express response object.
+   * @param {Function} next - The next middleware function.
+   * @returns {Promise&lt;void>}
+   */
+  return async function (req, res, next) {
+    console.log("Verifying token");
+    const authHeader = req.headers['authorization'];
+    if (!authHeader) {
+      console.log("AUTH HEADER NOT FOUND");
+      return res.status(401).send('AUTH HEADER NOT FOUND');
+    }
+    console.log("Auth header:", authHeader);
+
+    const token = authHeader.split(' ')[1];
+    if (!token) {
+      console.log("TOKEN NOT FOUND");
+      return res.status(401).send('TOKEN NOT FOUND');
+    }
+    console.log("Token:", token);
+
+    try {
+      const ticket = await client.verifyIdToken({
+        idToken: token,
+        audience: CLIENT_ID,
+      });
+
+      req.user = ticket.getPayload();
+      console.log("User payload:", req.user);
+
+      const email = req.user.email;
+
+      const emailRoleMap = await getEmailRoleMap();
+
+      if(!emailRoleMap[email]){
+        console.log("FORBIDDEN: Not an employee");
+        return res.status(403).send('FORBIDDEN');
+      }
+
+      if (requireManager &amp;&amp; emailRoleMap[email] !== 'Manager'){
+        console.log("FORBIDDEN: Not a manager");
+        return res.status(403).send('FORBIDDEN');
+      }
+
+      console.log("Token verified, proceeding to next");
+      next();
+    } catch (error) {
+      console.log("Error verifying token:", error.message);
+      return res.status(401).send('INVALID TOKEN');
+    }
+  };
+}
+
+/**
+ * Route to verify the user's role based on their email.
+ * @route GET /verify
+ * @middleware verifyToken(false)
+ * @async
+ * @param {object} req - The Express request object.
+ * @param {object} res - The Express response object.
+ * @returns {Promise&lt;void>} Sends the user's role or appropriate error messages.
+ */
+router.get('/verify', verifyToken(false), async (req, res) => {
+  try {
+    const email = req.user.email;
+
+    const emailRoleMap = await getEmailRoleMap();
+
+    if(!emailRoleMap[email]){
+      return res.status(403).send('FORBIDDEN');
+    }
+    
+    const role = emailRoleMap[email];
+
+    res.send(role);
+  } catch (error) {
+    console.error("Error verifying token:", error.message);
+    res.status(401).send('INVALID TOKEN');
+  }
+});
+
+export default router;</code></pre>
+        </article>
+    </section>
+
+
+
+
+    
+    
+</div>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.4</a> using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+</footer>
+
+<script>prettyPrint();</script>
+<script src="scripts/polyfill.js"></script>
+<script src="scripts/linenumber.js"></script>
+
+<script src="scripts/search.js" defer></script>
+
+
+<script src="scripts/collapse.js" defer></script>
+
+
+</body>
+</html>

@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    
+    <meta charset="utf-8">
+    <title>dao/InventoryItemDAO.js - Documentation</title>
+    
+    
+    <script src="scripts/prettify/prettify.js"></script>
+    <script src="scripts/prettify/lang-css.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc.css">
+    <script src="scripts/nav.js" defer></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+
+<input type="checkbox" id="nav-trigger" class="nav-trigger" />
+<label for="nav-trigger" class="navicon-button x">
+  <div class="navicon"></div>
+</label>
+
+<label for="nav-trigger" class="overlay"></label>
+
+<nav >
+    
+    <input type="text" id="nav-search" placeholder="Search" />
+    
+    <h2><a href="index.html">Home</a></h2><h2><a href="https://github.com/CSCE331-Fall2024/project-3-22-ctrl-alt-elite" target="_blank" class="menu-item" id="repository" >GitHub Repository</a></h2><h3>Classes</h3><ul><li><a href="Combo.html">Combo</a></li><li></li><li><a href="Employee.html">Employee</a></li><li></li><li><a href="global.html#InventoryItem">InventoryItem</a></li><li></li><li><a href="MenuItem.html">MenuItem</a></li><li></li><li><a href="MenuItemIngredient.html">MenuItemIngredient</a></li><li></li><li><a href="Order.html">Order</a></li><li></li><li><a href="OrderComboItem.html">OrderComboItem</a></li><li></li><li><a href="OrderItem.html">OrderItem</a></li><li></li></ul><h3>Modules</h3><ul><li><a href="module-comboRoutes.html">comboRoutes</a></li><li><a href="module-db.html">db</a></li><li><a href="module-employeeRoutes.html">employeeRoutes</a></li><li><a href="module-inventoryReportRoutes.html">inventoryReportRoutes</a></li><li><a href="module-menuItemRoutes.html">menuItemRoutes</a></li><li><a href="module-orderRoutes.html">orderRoutes</a></li><li><a href="module-reportRoutes.html">reportRoutes</a></li><li><a href="module-salesRoutes.html">salesRoutes</a></li><li><a href="module-speechOrderRoutes.html">speechOrderRoutes</a></li></ul><h3>Events</h3><ul><li><a href="global.html#event:connection">connection</a></li><li><a href="global.html#event:disconnect">disconnect</a></li></ul><h3>Global</h3><ul><li><a href="global.html#ComboDAO">ComboDAO</a></li><li><a href="global.html#EmployeeDAO">EmployeeDAO</a></li><li><a href="global.html#InventoryItemDAO">InventoryItemDAO</a></li><li><a href="global.html#MenuItemDAO">MenuItemDAO</a></li><li><a href="global.html#OrderComboItemDAO">OrderComboItemDAO</a></li><li><a href="global.html#OrderDAO">OrderDAO</a></li><li><a href="global.html#OrderItemDAO">OrderItemDAO</a></li><li><a href="global.html#ReportDAO">ReportDAO</a></li><li><a href="global.html#SalesDAO">SalesDAO</a></li><li><a href="global.html#checkIfOrderComplete">checkIfOrderComplete</a></li><li><a href="global.html#enforceComboRules">enforceComboRules</a></li><li><a href="global.html#generateAssistantResponse">generateAssistantResponse</a></li><li><a href="global.html#generateAudioResponse">generateAudioResponse</a></li><li><a href="global.html#getEmailRoleMap">getEmailRoleMap</a></li><li><a href="global.html#getMenuItemCategory">getMenuItemCategory</a></li><li><a href="global.html#middleware">middleware</a></li><li><a href="global.html#parseTranscription">parseTranscription</a></li><li><a href="global.html#processConversation">processConversation</a></li><li><a href="global.html#processOrder">processOrder</a></li><li><a href="global.html#startConversation">startConversation</a></li><li><a href="global.html#transcribeAudio">transcribeAudio</a></li><li><a href="global.html#verifyToken">verifyToken</a></li></ul>
+</nav>
+
+<div id="main">
+    
+    <h1 class="page-title">dao/InventoryItemDAO.js</h1>
+    
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import pool from '../db.js';
+import InventoryItem from '../models/InventoryItem.js';
+
+/**
+ * Data Access Object (DAO) for managing `InventoryItem` entities in the database.
+ */
+const InventoryItemDAO = {
+  /**
+   * Retrieves all active inventory items.
+   * @returns {Promise&lt;InventoryItem[]>} A promise that resolves to an array of `InventoryItem` objects.
+   * @throws {Error} Throws an error if the query fails.
+   */
+  async getAllInventoryItems() {
+    const query = `
+      SELECT * FROM inventory_items
+      WHERE "status" = 'active'
+      ORDER BY inventory_item_id;
+    `;
+    try {
+      const res = await pool.query(query);
+      return res.rows.map(row => new InventoryItem(
+        row.inventory_item_id,
+        row.name,
+        row.description,
+        row.quantity_in_stock,
+        row.unit,
+        row.recommended_quantity,
+        row.status
+      ));
+    } catch (err) {
+      console.error('Error fetching all inventory items:', err);
+      throw err;
+    }
+  },
+
+  /**
+   * Retrieves an inventory item by its ID.
+   * @param {number} id - The ID of the inventory item to retrieve.
+   * @returns {Promise&lt;InventoryItem|null>} A promise that resolves to the `InventoryItem` object if found, or `null` if not found.
+   * @throws {Error} Throws an error if the query fails.
+   */
+  async getInventoryItemById(id) {
+    const query = 'SELECT * FROM inventory_items WHERE inventory_item_id = $1;';
+    try {
+      const res = await pool.query(query, [id]);
+      if (res.rows.length > 0) {
+        const row = res.rows[0];
+        return new InventoryItem(
+          row.inventory_item_id,
+          row.name,
+          row.description,
+          row.quantity_in_stock,
+          row.unit,
+          row.recommended_quantity,
+          row.status
+        );
+      } else {
+        return null;
+      }
+    } catch (err) {
+      console.error(`Error fetching inventory item with ID ${id}:`, err);
+      throw err;
+    }
+  },
+
+  /**
+   * Adds a new inventory item to the database.
+   * @param {InventoryItem} item - The `InventoryItem` object to add.
+   * @returns {Promise&lt;InventoryItem>} A promise that resolves to the newly created `InventoryItem` object.
+   * @throws {Error} Throws an error if the query fails.
+   */
+  async addInventoryItem(item) {
+    const query = `
+      INSERT INTO inventory_items (name, description, quantity_in_stock, recommended_quantity, unit, "status")
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING *;
+    `;
+    const values = [
+      item.name,
+      item.description,
+      item.quantityInStock,
+      item.recommendedQuantity,
+      item.unit,
+      item.status || 'active'
+    ];
+
+    try {
+      const res = await pool.query(query, values);
+      const row = res.rows[0];
+      return new InventoryItem(
+        row.inventory_item_id,
+        row.name,
+        row.description,
+        row.quantity_in_stock,
+        row.unit,
+        row.recommended_quantity,
+        row.status
+      );
+    } catch (err) {
+      console.error('Error adding inventory item:', err);
+      throw err;
+    }
+  },
+
+  /**
+   * Updates an existing inventory item in the database.
+   * @param {number} id - The ID of the inventory item to update.
+   * @param {InventoryItem} updatedItem - The updated `InventoryItem` object.
+   * @returns {Promise&lt;InventoryItem|null>} A promise that resolves to the updated `InventoryItem` object if successful, or `null` if not found.
+   * @throws {Error} Throws an error if the query fails.
+   */
+  async updateInventoryItem(id, updatedItem) {
+    const query = `
+      UPDATE inventory_items
+      SET name = $1,
+          description = $2,
+          quantity_in_stock = $3,
+          recommended_quantity = $4,
+          unit = $5,
+          "status" = $6
+      WHERE inventory_item_id = $7
+      RETURNING *;
+    `;
+    try {
+      const res = await pool.query(query, [
+        updatedItem.name,
+        updatedItem.description,
+        updatedItem.quantityInStock,
+        updatedItem.recommendedQuantity,
+        updatedItem.unit,
+        updatedItem.status || 'active',
+        id
+      ]);
+      if (res.rows.length > 0) {
+        const row = res.rows[0];
+        return new InventoryItem(
+          row.inventory_item_id,
+          row.name,
+          row.description,
+          row.quantity_in_stock,
+          row.unit,
+          row.recommended_quantity,
+          row.status
+        );
+      } else {
+        return null;
+      }
+    } catch (err) {
+      console.error(`Error updating inventory item with ID ${id}:`, err);
+      throw err;
+    }
+  },
+
+  /**
+   * Adjusts the quantity of an inventory item.
+   * @param {number} id - The ID of the inventory item to adjust.
+   * @param {number} adjustment - The quantity adjustment to apply (positive or negative).
+   * @returns {Promise&lt;InventoryItem|null>} A promise that resolves to the updated `InventoryItem` object if successful, or `null` if not found.
+   * @throws {Error} Throws an error if the query fails.
+   */
+  async adjustInventoryQuantity(id, adjustment) {
+    const query = `
+      UPDATE inventory_items
+      SET quantity_in_stock = quantity_in_stock + $1
+      WHERE inventory_item_id = $2
+      RETURNING *;
+    `;
+    try {
+      const res = await pool.query(query, [adjustment, id]);
+      if (res.rows.length > 0) {
+        const row = res.rows[0];
+        return new InventoryItem(
+          row.inventory_item_id,
+          row.name,
+          row.description,
+          row.quantity_in_stock,
+          row.unit,
+          row.recommended_quantity,
+          row.status
+        );
+      } else {
+        return null;
+      }
+    } catch (err) {
+      console.error(`Error adjusting quantity for inventory item with ID ${id}:`, err);
+      throw err;
+    }
+  },
+
+  /**
+   * Marks an inventory item as inactive (soft delete).
+   * @param {number} id - The ID of the inventory item to delete.
+   * @returns {Promise&lt;InventoryItem|null>} A promise that resolves to the updated `InventoryItem` object if successful, or `null` if not found.
+   * @throws {Error} Throws an error if the query fails.
+   */
+  async deleteInventoryItem(id) {
+    const query = `
+      UPDATE inventory_items
+      SET "status" = 'inactive'
+      WHERE inventory_item_id = $1
+      RETURNING *;
+    `;
+    try {
+      const res = await pool.query(query, [id]);
+      if (res.rows.length > 0) {
+        const row = res.rows[0];
+        return new InventoryItem(
+          row.inventory_item_id,
+          row.name,
+          row.description,
+          row.quantity_in_stock,
+          row.unit,
+          row.recommended_quantity,
+          row.status
+        );
+      } else {
+        return null;
+      }
+    } catch (err) {
+      console.error(`Error deleting inventory item with ID ${id}:`, err);
+      throw err;
+    }
+  }
+};
+
+export default InventoryItemDAO;
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+    
+    
+</div>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.4</a> using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+</footer>
+
+<script>prettyPrint();</script>
+<script src="scripts/polyfill.js"></script>
+<script src="scripts/linenumber.js"></script>
+
+<script src="scripts/search.js" defer></script>
+
+
+<script src="scripts/collapse.js" defer></script>
+
+
+</body>
+</html>

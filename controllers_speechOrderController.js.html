@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    
+    <meta charset="utf-8">
+    <title>controllers/speechOrderController.js - Documentation</title>
+    
+    
+    <script src="scripts/prettify/prettify.js"></script>
+    <script src="scripts/prettify/lang-css.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc.css">
+    <script src="scripts/nav.js" defer></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+
+<input type="checkbox" id="nav-trigger" class="nav-trigger" />
+<label for="nav-trigger" class="navicon-button x">
+  <div class="navicon"></div>
+</label>
+
+<label for="nav-trigger" class="overlay"></label>
+
+<nav >
+    
+    <input type="text" id="nav-search" placeholder="Search" />
+    
+    <h2><a href="index.html">Home</a></h2><h2><a href="https://github.com/CSCE331-Fall2024/project-3-22-ctrl-alt-elite" target="_blank" class="menu-item" id="repository" >GitHub Repository</a></h2><h3>Classes</h3><ul><li><a href="Combo.html">Combo</a></li><li></li><li><a href="Employee.html">Employee</a></li><li></li><li><a href="global.html#InventoryItem">InventoryItem</a></li><li></li><li><a href="MenuItem.html">MenuItem</a></li><li></li><li><a href="MenuItemIngredient.html">MenuItemIngredient</a></li><li></li><li><a href="Order.html">Order</a></li><li></li><li><a href="OrderComboItem.html">OrderComboItem</a></li><li></li><li><a href="OrderItem.html">OrderItem</a></li><li></li></ul><h3>Modules</h3><ul><li><a href="module-comboRoutes.html">comboRoutes</a></li><li><a href="module-db.html">db</a></li><li><a href="module-employeeRoutes.html">employeeRoutes</a></li><li><a href="module-inventoryReportRoutes.html">inventoryReportRoutes</a></li><li><a href="module-menuItemRoutes.html">menuItemRoutes</a></li><li><a href="module-orderRoutes.html">orderRoutes</a></li><li><a href="module-reportRoutes.html">reportRoutes</a></li><li><a href="module-salesRoutes.html">salesRoutes</a></li><li><a href="module-speechOrderRoutes.html">speechOrderRoutes</a></li></ul><h3>Events</h3><ul><li><a href="global.html#event:connection">connection</a></li><li><a href="global.html#event:disconnect">disconnect</a></li></ul><h3>Global</h3><ul><li><a href="global.html#ComboDAO">ComboDAO</a></li><li><a href="global.html#EmployeeDAO">EmployeeDAO</a></li><li><a href="global.html#InventoryItemDAO">InventoryItemDAO</a></li><li><a href="global.html#MenuItemDAO">MenuItemDAO</a></li><li><a href="global.html#OrderComboItemDAO">OrderComboItemDAO</a></li><li><a href="global.html#OrderDAO">OrderDAO</a></li><li><a href="global.html#OrderItemDAO">OrderItemDAO</a></li><li><a href="global.html#ReportDAO">ReportDAO</a></li><li><a href="global.html#SalesDAO">SalesDAO</a></li><li><a href="global.html#checkIfOrderComplete">checkIfOrderComplete</a></li><li><a href="global.html#enforceComboRules">enforceComboRules</a></li><li><a href="global.html#generateAssistantResponse">generateAssistantResponse</a></li><li><a href="global.html#generateAudioResponse">generateAudioResponse</a></li><li><a href="global.html#getEmailRoleMap">getEmailRoleMap</a></li><li><a href="global.html#getMenuItemCategory">getMenuItemCategory</a></li><li><a href="global.html#middleware">middleware</a></li><li><a href="global.html#parseTranscription">parseTranscription</a></li><li><a href="global.html#processConversation">processConversation</a></li><li><a href="global.html#processOrder">processOrder</a></li><li><a href="global.html#startConversation">startConversation</a></li><li><a href="global.html#transcribeAudio">transcribeAudio</a></li><li><a href="global.html#verifyToken">verifyToken</a></li></ul>
+</nav>
+
+<div id="main">
+    
+    <h1 class="page-title">controllers/speechOrderController.js</h1>
+    
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * @file speechOrderController.js
+ * @description Controller for handling speech-based ordering conversations in the Panda Express application.
+ */
+
+import axios from 'axios';
+import FormData from 'form-data';
+import dotenv from 'dotenv';
+import MenuItemDAO from '../dao/MenuItemDAO.js';
+import { v4 as uuidv4 } from 'uuid';
+import ffmpeg from 'fluent-ffmpeg';
+import fs from 'fs';
+import path from 'path';
+
+dotenv.config();
+
+const conversations = {}; // In-memory storage for conversations
+
+/**
+ * Starts a new conversation by generating a unique conversation ID and sending an initial message.
+ *
+ * @async
+ * @function startConversation
+ * @param {Object} req - The HTTP request object.
+ * @param {Object} res - The HTTP response object.
+ * @returns {Promise&lt;void>} Sends a JSON response containing the conversation ID and initial audio.
+ */
+export const startConversation = async (req, res) => {
+  try {
+    const conversationId = uuidv4();
+
+    // Create initial message from the assistant
+    const initialMessage = {
+      role: 'assistant',
+      content: 'Welcome to Panda Express! What would you like to order today?',
+    };
+
+    conversations[conversationId] = [initialMessage];
+
+    // Generate audio for initial message using TTS API
+    const audioData = await generateAudioResponse(initialMessage.content);
+
+    res.json({ conversationId, audio: audioData });
+  } catch (error) {
+    console.error('Error starting conversation:', error);
+    res.status(500).json({ error: 'Failed to start conversation.' });
+  }
+};
+
+/**
+ * Processes an ongoing conversation by handling user audio input, transcribing it, generating assistant responses,
+ * and determining if the conversation has concluded.
+ *
+ * @async
+ * @function processConversation
+ * @param {Object} req - The HTTP request object containing conversation ID and user audio file.
+ * @param {Object} res - The HTTP response object.
+ * @returns {Promise&lt;void>} Sends a JSON response with the assistant's audio, conversation status, and order data if completed.
+ */
+export const processConversation = async (req, res) => {
+  try {
+    const { conversationId } = req.body;
+
+    if (!conversationId || !conversations[conversationId]) {
+      return res.status(400).json({ error: 'Invalid conversation ID.' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'No audio file uploaded.' });
+    }
+
+    const userAudio = req.file;
+    console.log('Received file:');
+    console.log('Original Name:', userAudio.originalname);
+    console.log('MIME Type:', userAudio.mimetype);
+    console.log('Buffer Length:', userAudio.buffer.length);
+
+    // Save received file for debugging
+    fs.writeFileSync('/tmp/received_audio', userAudio.buffer);
+
+    // Transcribe user's speech
+    const userTranscript = await transcribeAudio(userAudio);
+
+    // Add user's message to conversation
+    const userMessage = {
+      role: 'user',
+      content: userTranscript,
+    };
+
+    conversations[conversationId].push(userMessage);
+
+    // Generate assistant's response
+    const assistantMessage = await generateAssistantResponse(conversations[conversationId]);
+
+    // Ensure assistantMessage.content is set
+    if (!assistantMessage.content &amp;&amp; assistantMessage.audio &amp;&amp; assistantMessage.audio.transcript) {
+      assistantMessage.content = assistantMessage.audio.transcript;
+    } else if (!assistantMessage.content) {
+      assistantMessage.content = '';
+    }
+
+    conversations[conversationId].push(assistantMessage);
+
+    // Check if the conversation should end
+    let finished = false;
+    let orderData = null;
+    const assistantContent = assistantMessage.content;
+    if (checkIfOrderComplete(assistantContent)) {
+      console.log('Order is complete based on assistant response.');
+      finished = true;
+      orderData = await processOrder(conversations[conversationId]);
+      delete conversations[conversationId]; // Clean up conversation
+    } else {
+      console.log('Order is not yet complete.');
+    }
+
+    // Extract audio data from assistant's response
+    let audioData = null;
+    if (assistantMessage.audio &amp;&amp; assistantMessage.audio.data) {
+      audioData = assistantMessage.audio.data;
+    } else {
+      // Generate audio using TTS API if not provided
+      audioData = await generateAudioResponse(assistantContent);
+    }
+
+    res.json({ audio: audioData, finished, orderData });
+  } catch (error) {
+    console.error('Error processing conversation:', error);
+    res.status(500).json({ error: 'Failed to process conversation.' });
+  }
+};
+
+/**
+ * Transcribes an audio file using the OpenAI Whisper API.
+ *
+ * @async
+ * @function transcribeAudio
+ * @param {Object} file - The uploaded audio file object.
+ * @param {Buffer} file.buffer - The audio file buffer.
+ * @param {string} file.originalname - The original name of the uploaded file.
+ * @returns {Promise&lt;string>} The transcribed text from the audio.
+ * @throws Will throw an error if transcription fails.
+ */
+const transcribeAudio = async (file) => {
+  try {
+    if (!file.buffer) {
+      throw new Error('Invalid or missing audio buffer.');
+    }
+
+    // Save the uploaded file to a temporary location
+    const tempInputPath = path.join('/tmp', file.originalname);
+    fs.writeFileSync(tempInputPath, file.buffer);
+
+    // Convert the audio to WAV format using ffmpeg
+    const tempOutputPath = path.join('/tmp', 'converted_audio.wav');
+    await new Promise((resolve, reject) => {
+      ffmpeg(tempInputPath)
+        .output(tempOutputPath)
+        .on('end', () => {
+          console.log('Audio conversion completed');
+          resolve();
+        })
+        .on('error', (err) => {
+          console.error('Error during audio conversion:', err);
+          reject(err);
+        })
+        .run();
+    });
+
+    // Read the converted audio file
+    const convertedBuffer = fs.readFileSync(tempOutputPath);
+
+    const OPEN_AI_KEY = process.env.OPEN_AI_KEY;
+
+    const formData = new FormData();
+    formData.append('file', convertedBuffer, {
+      filename: 'converted_audio.wav',
+      contentType: 'audio/wav',
+    });
+    formData.append('model', 'whisper-1');
+    formData.append('language', 'en');
+
+    const headers = {
+      'Authorization': `Bearer ${OPEN_AI_KEY}`,
+      ...formData.getHeaders(),
+    };
+
+    const response = await axios.post(
+      'https://api.openai.com/v1/audio/transcriptions',
+      formData,
+      { headers }
+    );
+
+    const transcription = response.data.text;
+    console.log('User Transcription:', transcription);
+
+    // Clean up temporary files
+    fs.unlinkSync(tempInputPath);
+    fs.unlinkSync(tempOutputPath);
+
+    return transcription;
+  } catch (error) {
+    console.error('Error during transcription:', error.response?.data || error.message);
+    throw new Error('Transcription failed.');
+  }
+};
+
+/**
+ * Generates the assistant's response based on the current conversation.
+ *
+ * @async
+ * @function generateAssistantResponse
+ * @param {Array&lt;Object>} conversation - The array of conversation messages.
+ * @returns {Promise&lt;Object>} The assistant's message object, including content and audio data.
+ * @throws Will throw an error if response generation fails.
+ */
+const generateAssistantResponse = async (conversation) => {
+  try {
+    const OPEN_AI_KEY = process.env.OPEN_AI_KEY;
+
+    // Ensure all messages have content
+    const messages = [
+      {
+        role: 'system',
+        content: `You are a helpful assistant at Panda Express restaurant.
+Your task is to take the customer's order, confirm the items, and when the customer is finished ordering, let them know that their order has been placed.
+Please use phrases like "Thank you for your order", or "Have a great day" when the conversation should end. Don't mention the price or payment.
+`,
+      },
+      ...conversation.map(msg => ({
+        role: msg.role,
+        content: msg.content || (msg.audio &amp;&amp; msg.audio.transcript) || '',
+      })),
+    ];
+
+    const response = await axios.post(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        model: 'gpt-4o-audio-preview',
+        modalities: ['text', 'audio'],
+        audio: { voice: 'alloy', format: 'wav' },
+        messages: messages,
+        max_tokens: 500,
+        temperature: 0.7,
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${OPEN_AI_KEY}`,
+        },
+      }
+    );
+
+    const assistantMessage = response.data.choices[0].message;
+    console.log('Assistant Response:', assistantMessage);
+
+    // If content is null, set it from audio transcript
+    if (!assistantMessage.content &amp;&amp; assistantMessage.audio &amp;&amp; assistantMessage.audio.transcript) {
+      assistantMessage.content = assistantMessage.audio.transcript;
+    }
+
+    // Check if audio data is present
+    if (!assistantMessage.audio || !assistantMessage.audio.data) {
+      console.warn('Assistant response does not contain audio data. Generating audio using TTS.');
+      assistantMessage.audio = {
+        data: await generateAudioResponse(assistantMessage.content),
+      };
+    }
+
+    return assistantMessage;
+  } catch (error) {
+    console.error('Error generating assistant response:', error.response?.data || error.message);
+    throw new Error('Assistant response generation failed.');
+  }
+};
+
+/**
+ * Generates audio data for a given text using the OpenAI TTS API.
+ *
+ * @async
+ * @function generateAudioResponse
+ * @param {string} text - The text to convert to speech.
+ * @returns {Promise&lt;string>} Base64 encoded audio data.
+ * @throws Will throw an error if audio generation fails.
+ */
+const generateAudioResponse = async (text) => {
+  try {
+    const OPEN_AI_KEY = process.env.OPEN_AI_KEY;
+
+    const response = await axios.post(
+      'https://api.openai.com/v1/audio/speech',
+      {
+        model: 'tts-1',
+        voice: 'alloy',
+        input: text,
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${OPEN_AI_KEY}`,
+        },
+        responseType: 'arraybuffer', // Important to get binary data
+      }
+    );
+
+    const audioData = Buffer.from(response.data).toString('base64');
+    return audioData; // Base64 encoded audio data
+  } catch (error) {
+    console.error('Error generating audio response:', error.response?.data || error.message);
+    throw new Error('Audio response generation failed.');
+  }
+};
+
+/**
+ * Determines whether the conversation has reached a completion state based on the assistant's response.
+ *
+ * @function checkIfOrderComplete
+ * @param {string} assistantResponse - The assistant's response text.
+ * @returns {boolean} True if the order is complete, otherwise false.
+ */
+const checkIfOrderComplete = (assistantResponse) => {
+  // Implement logic to determine if the order is complete
+  const lowerResponse = assistantResponse.toLowerCase();
+  return lowerResponse.includes('your order has been placed') ||
+         lowerResponse.includes('thank you for your order') ||
+         lowerResponse.includes('have a great day') ||
+         lowerResponse.includes('goodbye');
+};
+
+/**
+ * Processes the completed order by parsing the conversation to extract order details and validating them.
+ *
+ * @async
+ * @function processOrder
+ * @param {Array&lt;Object>} conversation - The array of conversation messages.
+ * @returns {Promise&lt;Object>} The processed order data containing matched and unmatched items.
+ * @throws Will throw an error if order validation fails.
+ */
+const processOrder = async (conversation) => {
+  // Extract order details from the conversation
+  const orderText = conversation
+    .filter(msg => msg.role === 'user')
+    .map(msg => msg.content)
+    .join(' ');
+
+  console.log('Order Text:', orderText);
+
+  // Parse the order text
+  const { matchedItems, unmatchedItems } = await parseTranscription(orderText);
+
+  console.log('Matched Items:', matchedItems);
+  console.log('Unmatched Items:', unmatchedItems);
+
+  const validationErrors = enforceComboRules({ matchedItems, unmatchedItems });
+
+  if (validationErrors.length > 0) {
+    console.error('Order validation errors:', validationErrors);
+    throw new Error('Order validation failed.');
+  }
+
+  // Return the order data
+  return { matchedItems, unmatchedItems };
+};
+
+let entreeItems = [];
+let sideItems = [];
+let drinkItems = [];
+
+/**
+ * Parses the transcription text to extract and categorize ordered items using OpenAI's GPT model.
+ *
+ * @async
+ * @function parseTranscription
+ * @param {string} transcription - The transcribed text from the user's audio.
+ * @returns {Promise&lt;Object>} An object containing lists of matched and unmatched items.
+ * @throws Will throw an error if parsing fails.
+ */
+const parseTranscription = async (transcription) => {
+  try {
+    const OPEN_AI_KEY = process.env.OPEN_AI_KEY;
+
+    entreeItems = await MenuItemDAO.getMenuItemsByCategory('Entree');
+    sideItems = await MenuItemDAO.getMenuItemsByCategory('Side');
+    drinkItems = await MenuItemDAO.getMenuItemsByCategory('Drink');
+
+    const formatMenuItems = (items) => items.map(item => item.name);
+
+    // Menu sections
+    const menuSections = `
+**Menu Items:**
+
+*Entrees:*
+${formatMenuItems(entreeItems).join(', ')}
+
+*Sides:*
+${formatMenuItems(sideItems).join(', ')}
+
+*Drinks:*
+${formatMenuItems(drinkItems).join(', ')}
+`;
+
+    const prompt = `
+You are an assistant that processes customer orders for a restaurant.
+
+${menuSections}
+
+**Combos:**
+bowl: 1 side and 1 entree
+plate: 1 side and 2 entrees
+bigger plate: 1 side and 3 entrees
+
+**Instructions:**
+- Interpret the customer's order from the transcription below.
+- Map the items mentioned to the closest matching menu items in the menu provided.
+- Correct any minor spelling mistakes or word order errors.
+- Understand corrections or changes in the order (e.g., "wait no", "actually", "instead") and apply the latest choice. Do not include items the customer changed their mind about.
+- Group items into their respective combos based on the customer's order.
+- For each combo, list the included items under "subItems".
+- Return two lists:
+  - "matchedItems": a list of items and combos that were successfully matched to the menu.
+  - "unmatchedItems": a list of items that could not be matched to the menu.
+- Provide the output in valid JSON format with the following structure:
+{
+  "matchedItems": [
+    {
+      "type": "combo",
+      "name": "Combo Name",
+      "quantity": Number,
+      "subItems": [
+        { "name": "Sub-item Name", "quantity": Number },
+        ...
+      ]
+    },
+  ],
+  "unmatchedItems": [
+    { "name": "Item Name", "quantity": Number },
+    ...
+  ]
+}
+
+**Transcription:**
+"${transcription}"
+
+Ensure the output is valid JSON, with no additional text.
+`;
+
+    const response = await axios.post(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'user', content: prompt },
+        ],
+        max_tokens: 500,
+        temperature: 0,
+        top_p: 1,
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${OPEN_AI_KEY}`,
+        },
+      }
+    );
+
+    const completionText = response.data.choices[0].message.content.trim();
+    console.log('Parsed Order:', completionText);
+    const parsedOrder = JSON.parse(completionText);
+    return parsedOrder;
+  } catch (error) {
+    console.error('Error during parsing:', error.response?.data || error.message);
+    throw new Error('Parsing failed.');
+  }
+};
+
+/**
+ * Validates the order against predefined combo rules to ensure correctness.
+ *
+ * @function enforceComboRules
+ * @param {Object} order - The order object containing matched and unmatched items.
+ * @param {Array&lt;Object>} order.matchedItems - List of successfully matched items and combos.
+ * @param {Array&lt;Object>} order.unmatchedItems - List of items that could not be matched.
+ * @returns {Array&lt;string>} A list of validation error messages.
+ */
+const enforceComboRules = ({ matchedItems, unmatchedItems }) => {
+  const validationErrors = [];
+
+  const comboRules = {
+    'bowl': { sides: 1, entrees: 1 },
+    'plate': { sides: 1, entrees: 2 },
+    'bigger plate': { sides: 1, entrees: 3 },
+  };
+
+  for (const item of matchedItems) {
+    if (item.type === 'combo') {
+      const rules = comboRules[item.name.toLowerCase()];
+      if (!rules) {
+        validationErrors.push(`Invalid combo name: ${item.name}`);
+        continue;
+      }
+
+      let sideCount = 0;
+      let entreeCount = 0;
+
+      for (const subItem of item.subItems) {
+        const category = getMenuItemCategory(subItem.name);
+        if (category === 'Side') {
+          sideCount += subItem.quantity || 1;
+        } else if (category === 'Entree') {
+          entreeCount += subItem.quantity || 1;
+        }
+      }
+
+      if (sideCount !== rules.sides) {
+        validationErrors.push(`${item.name} requires ${rules.sides} side(s), but got ${sideCount}`);
+      }
+
+      if (entreeCount !== rules.entrees) {
+        validationErrors.push(`${item.name} requires ${rules.entrees} entree(s), but got ${entreeCount}`);
+      }
+    }
+  }
+
+  for (const item of unmatchedItems) {
+    validationErrors.push(`${item.name} not recognized.`);
+  }
+
+  return validationErrors;
+};
+
+/**
+ * Retrieves the category of a menu item based on its name.
+ *
+ * @function getMenuItemCategory
+ * @param {string} itemName - The name of the menu item.
+ * @returns {string|null} The category of the item ("Entree", "Side", "Drink") or null if not found.
+ */
+const getMenuItemCategory = (itemName) => {
+  const lowerName = itemName.toLowerCase();
+
+  let item = entreeItems.find(mi => mi.name.toLowerCase() === lowerName);
+  if (item) return 'Entree';
+
+  item = sideItems.find(mi => mi.name.toLowerCase() === lowerName);
+  if (item) return 'Side';
+
+  item = drinkItems.find(mi => mi.name.toLowerCase() === lowerName);
+  if (item) return 'Drink';
+
+  return null;
+};</code></pre>
+        </article>
+    </section>
+
+
+
+
+    
+    
+</div>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.4</a> using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+</footer>
+
+<script>prettyPrint();</script>
+<script src="scripts/polyfill.js"></script>
+<script src="scripts/linenumber.js"></script>
+
+<script src="scripts/search.js" defer></script>
+
+
+<script src="scripts/collapse.js" defer></script>
+
+
+</body>
+</html>

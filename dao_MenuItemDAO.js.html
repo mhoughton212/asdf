@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    
+    <meta charset="utf-8">
+    <title>dao/MenuItemDAO.js - Documentation</title>
+    
+    
+    <script src="scripts/prettify/prettify.js"></script>
+    <script src="scripts/prettify/lang-css.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc.css">
+    <script src="scripts/nav.js" defer></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+
+<input type="checkbox" id="nav-trigger" class="nav-trigger" />
+<label for="nav-trigger" class="navicon-button x">
+  <div class="navicon"></div>
+</label>
+
+<label for="nav-trigger" class="overlay"></label>
+
+<nav >
+    
+    <input type="text" id="nav-search" placeholder="Search" />
+    
+    <h2><a href="index.html">Home</a></h2><h2><a href="https://github.com/CSCE331-Fall2024/project-3-22-ctrl-alt-elite" target="_blank" class="menu-item" id="repository" >GitHub Repository</a></h2><h3>Classes</h3><ul><li><a href="Combo.html">Combo</a></li><li></li><li><a href="Employee.html">Employee</a></li><li></li><li><a href="global.html#InventoryItem">InventoryItem</a></li><li></li><li><a href="MenuItem.html">MenuItem</a></li><li></li><li><a href="MenuItemIngredient.html">MenuItemIngredient</a></li><li></li><li><a href="Order.html">Order</a></li><li></li><li><a href="OrderComboItem.html">OrderComboItem</a></li><li></li><li><a href="OrderItem.html">OrderItem</a></li><li></li></ul><h3>Modules</h3><ul><li><a href="module-comboRoutes.html">comboRoutes</a></li><li><a href="module-db.html">db</a></li><li><a href="module-employeeRoutes.html">employeeRoutes</a></li><li><a href="module-inventoryReportRoutes.html">inventoryReportRoutes</a></li><li><a href="module-menuItemRoutes.html">menuItemRoutes</a></li><li><a href="module-orderRoutes.html">orderRoutes</a></li><li><a href="module-reportRoutes.html">reportRoutes</a></li><li><a href="module-salesRoutes.html">salesRoutes</a></li><li><a href="module-speechOrderRoutes.html">speechOrderRoutes</a></li></ul><h3>Events</h3><ul><li><a href="global.html#event:connection">connection</a></li><li><a href="global.html#event:disconnect">disconnect</a></li></ul><h3>Global</h3><ul><li><a href="global.html#ComboDAO">ComboDAO</a></li><li><a href="global.html#EmployeeDAO">EmployeeDAO</a></li><li><a href="global.html#InventoryItemDAO">InventoryItemDAO</a></li><li><a href="global.html#MenuItemDAO">MenuItemDAO</a></li><li><a href="global.html#OrderComboItemDAO">OrderComboItemDAO</a></li><li><a href="global.html#OrderDAO">OrderDAO</a></li><li><a href="global.html#OrderItemDAO">OrderItemDAO</a></li><li><a href="global.html#ReportDAO">ReportDAO</a></li><li><a href="global.html#SalesDAO">SalesDAO</a></li><li><a href="global.html#checkIfOrderComplete">checkIfOrderComplete</a></li><li><a href="global.html#enforceComboRules">enforceComboRules</a></li><li><a href="global.html#generateAssistantResponse">generateAssistantResponse</a></li><li><a href="global.html#generateAudioResponse">generateAudioResponse</a></li><li><a href="global.html#getEmailRoleMap">getEmailRoleMap</a></li><li><a href="global.html#getMenuItemCategory">getMenuItemCategory</a></li><li><a href="global.html#middleware">middleware</a></li><li><a href="global.html#parseTranscription">parseTranscription</a></li><li><a href="global.html#processConversation">processConversation</a></li><li><a href="global.html#processOrder">processOrder</a></li><li><a href="global.html#startConversation">startConversation</a></li><li><a href="global.html#transcribeAudio">transcribeAudio</a></li><li><a href="global.html#verifyToken">verifyToken</a></li></ul>
+</nav>
+
+<div id="main">
+    
+    <h1 class="page-title">dao/MenuItemDAO.js</h1>
+    
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import pool from '../db.js';
+import MenuItem from '../models/MenuItem.js';
+import MenuItemIngredient from '../models/MenuItemIngredient.js';
+
+/**
+ * Data Access Object (DAO) for handling menu items and their related operations.
+ */
+const MenuItemDAO = {
+  /**
+   * Retrieves all active menu items from the database.
+   * @returns {Promise&lt;Array&lt;MenuItem>>} A promise that resolves to an array of active menu items.
+   * @throws {Error} Throws an error if the query fails.
+   */
+  async getAllMenuItems() {
+    const query = "SELECT * FROM menu_items WHERE status = 'Active'";
+    try {
+      const res = await pool.query(query);
+      return res.rows.map(row => new MenuItem(
+        row.menu_item_id,
+        row.name,
+        row.description,
+        row.price,
+        row.category,
+        row.status
+      ));
+    } catch (err) {
+      console.error('Error fetching all menu items:', err);
+      throw err;
+    }
+  },
+
+  /**
+   * Retrieves a menu item by its ID, including its associated ingredients.
+   * @param {number} id - The ID of the menu item.
+   * @returns {Promise&lt;MenuItem|null>} A promise that resolves to the menu item or `null` if not found.
+   * @throws {Error} Throws an error if the query fails.
+   */
+  async getMenuItemById(id) {
+    const menuItemQuery = "SELECT * FROM menu_items WHERE menu_item_id = $1";
+    const ingredientsQuery = `
+      SELECT mii.*, ii.name
+      FROM menu_item_ingredients mii
+      JOIN inventory_items ii ON mii.inventory_item_id = ii.inventory_item_id
+      WHERE mii.menu_item_id = $1
+    `;
+    try {
+      const menuItemRes = await pool.query(menuItemQuery, [id]);
+      if (menuItemRes.rows.length > 0) {
+        const row = menuItemRes.rows[0];
+        const menuItem = new MenuItem(
+          row.menu_item_id,
+          row.name,
+          row.description,
+          row.price,
+          row.category,
+          row.status
+        );
+
+        // Fetch ingredients
+        const ingredientsRes = await pool.query(ingredientsQuery, [id]);
+        menuItem.ingredients = ingredientsRes.rows.map(ingredientRow => new MenuItemIngredient(
+          ingredientRow.menu_item_id,
+          ingredientRow.inventory_item_id,
+          ingredientRow.quantity_required,
+          ingredientRow.unit,
+          ingredientRow.name
+        ));
+
+        return menuItem;
+      } else {
+        return null;
+      }
+    } catch (err) {
+      console.error('Error fetching menu item by ID:', err);
+      throw err;
+    }
+  },
+
+  /**
+   * Retrieves all active menu items by category.
+   * @param {string} category - The category of the menu items.
+   * @returns {Promise&lt;Array&lt;MenuItem>>} A promise that resolves to an array of menu items in the given category.
+   * @throws {Error} Throws an error if the query fails.
+   */
+  async getMenuItemsByCategory(category) {
+    const query = "SELECT * FROM menu_items WHERE category = $1 AND status = 'Active'";
+    try {
+      const res = await pool.query(query, [category]);
+      return res.rows.map(row => new MenuItem(
+        row.menu_item_id,
+        row.name,
+        row.description,
+        row.price,
+        row.category,
+        row.status
+      ));
+    } catch (err) {
+      console.error('Error fetching menu items by category:', err);
+      throw err;
+    }
+  },
+
+  /**
+   * Adds a new menu item to the database.
+   * @param {MenuItem} menuItem - The menu item to add.
+   * @returns {Promise&lt;MenuItem>} A promise that resolves to the newly added menu item.
+   * @throws {Error} Throws an error if the query fails.
+   */
+  async addMenuItem(menuItem) {
+    const query = `
+      INSERT INTO menu_items (name, description, price, category, status)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING menu_item_id;
+    `;
+    try {
+      const res = await pool.query(query, [
+        menuItem.name,
+        menuItem.description,
+        menuItem.price,
+        menuItem.category,
+        menuItem.status || 'Active',
+      ]);
+      const newMenuItemId = res.rows[0].menu_item_id;
+      return await this.getMenuItemById(newMenuItemId);
+    } catch (err) {
+      console.error('Error adding new menu item:', err);
+      throw err;
+    }
+  },
+
+  /**
+   * Retrieves menu items by their status (e.g., active, inactive).
+   * @param {string} status - The status of the menu items.
+   * @returns {Promise&lt;Array&lt;MenuItem>>} A promise that resolves to an array of menu items with the given status.
+   * @throws {Error} Throws an error if the query fails.
+   */
+  async getMenuItemsByStatus(status) {
+    const query = "SELECT * FROM menu_items WHERE status = $1";
+    try {
+      const res = await pool.query(query, [status]);
+      return res.rows.map(row => new MenuItem(
+        row.menu_item_id,
+        row.name,
+        row.description,
+        row.price,
+        row.category,
+        row.status
+      ));
+    } catch (err) {
+      console.error('Error fetching menu items by status:', err);
+      throw err;
+    }
+  },
+
+  /**
+   * Updates an existing menu item in the database, including its ingredients.
+   * @param {MenuItem} menuItem - The menu item to update.
+   * @returns {Promise&lt;MenuItem|null>} A promise that resolves to the updated menu item or `null` if not found.
+   * @throws {Error} Throws an error if the update fails.
+   */
+  async updateMenuItem(menuItem) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+  
+      const updateMenuItemQuery = `
+        UPDATE menu_items
+        SET name = $1,
+            description = $2,
+            price = $3,
+            category = $4,
+            status = $5
+        WHERE menu_item_id = $6;
+      `;
+  
+      const res = await client.query(updateMenuItemQuery, [
+        menuItem.name,
+        menuItem.description,
+        menuItem.price,
+        menuItem.category,
+        menuItem.status,
+        menuItem.menuItemId,
+      ]);
+  
+      if (res.rowCount === 0) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+  
+      const deleteIngredientsQuery = `
+        DELETE FROM menu_item_ingredients WHERE menu_item_id = $1;
+      `;
+      await client.query(deleteIngredientsQuery, [menuItem.menuItemId]);
+  
+      const insertIngredientQuery = `
+        INSERT INTO menu_item_ingredients (menu_item_id, inventory_item_id, quantity_required, unit)
+        VALUES ($1, $2, $3, $4);
+      `;
+      for (const ingredient of menuItem.ingredients) {
+        await client.query(insertIngredientQuery, [
+          menuItem.menuItemId,
+          ingredient.inventoryItemId,
+          ingredient.quantityRequired,
+          ingredient.unit,
+        ]);
+      }
+  
+      await client.query('COMMIT');
+      return await this.getMenuItemById(menuItem.menuItemId);
+    } catch (err) {
+      await client.query('ROLLBACK');
+      console.error('Error updating menu item:', err);
+      throw err;
+    } finally {
+      client.release();
+    }
+  },
+
+  /**
+   * Soft deletes a menu item by marking its status as 'Inactive'.
+   * @param {number} id - The ID of the menu item to delete.
+   * @returns {Promise&lt;boolean>} A promise that resolves to `true` if the item was deleted, or `false` otherwise.
+   * @throws {Error} Throws an error if the query fails.
+   */
+  async deleteMenuItem(id) {
+    const query = `
+      UPDATE menu_items
+      SET status = 'Inactive'
+      WHERE menu_item_id = $1;
+    `;
+    try {
+      const res = await pool.query(query, [id]);
+      return res.rowCount > 0;
+    } catch (err) {
+      console.error('Error deleting menu item:', err);
+      throw err;
+    }
+  },
+};
+
+export default MenuItemDAO;
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+    
+    
+</div>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.4</a> using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+</footer>
+
+<script>prettyPrint();</script>
+<script src="scripts/polyfill.js"></script>
+<script src="scripts/linenumber.js"></script>
+
+<script src="scripts/search.js" defer></script>
+
+
+<script src="scripts/collapse.js" defer></script>
+
+
+</body>
+</html>

@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    
+    <meta charset="utf-8">
+    <title>routes/orderRoutes.js - Documentation</title>
+    
+    
+    <script src="scripts/prettify/prettify.js"></script>
+    <script src="scripts/prettify/lang-css.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc.css">
+    <script src="scripts/nav.js" defer></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+
+<input type="checkbox" id="nav-trigger" class="nav-trigger" />
+<label for="nav-trigger" class="navicon-button x">
+  <div class="navicon"></div>
+</label>
+
+<label for="nav-trigger" class="overlay"></label>
+
+<nav >
+    
+    <input type="text" id="nav-search" placeholder="Search" />
+    
+    <h2><a href="index.html">Home</a></h2><h2><a href="https://github.com/CSCE331-Fall2024/project-3-22-ctrl-alt-elite" target="_blank" class="menu-item" id="repository" >GitHub Repository</a></h2><h3>Classes</h3><ul><li><a href="Combo.html">Combo</a></li><li></li><li><a href="Employee.html">Employee</a></li><li></li><li><a href="global.html#InventoryItem">InventoryItem</a></li><li></li><li><a href="MenuItem.html">MenuItem</a></li><li></li><li><a href="MenuItemIngredient.html">MenuItemIngredient</a></li><li></li><li><a href="Order.html">Order</a></li><li></li><li><a href="OrderComboItem.html">OrderComboItem</a></li><li></li><li><a href="OrderItem.html">OrderItem</a></li><li></li></ul><h3>Modules</h3><ul><li><a href="module-comboRoutes.html">comboRoutes</a></li><li><a href="module-db.html">db</a></li><li><a href="module-employeeRoutes.html">employeeRoutes</a></li><li><a href="module-inventoryReportRoutes.html">inventoryReportRoutes</a></li><li><a href="module-menuItemRoutes.html">menuItemRoutes</a></li><li><a href="module-orderRoutes.html">orderRoutes</a></li><li><a href="module-reportRoutes.html">reportRoutes</a></li><li><a href="module-salesRoutes.html">salesRoutes</a></li><li><a href="module-speechOrderRoutes.html">speechOrderRoutes</a></li></ul><h3>Events</h3><ul><li><a href="global.html#event:connection">connection</a></li><li><a href="global.html#event:disconnect">disconnect</a></li></ul><h3>Global</h3><ul><li><a href="global.html#ComboDAO">ComboDAO</a></li><li><a href="global.html#EmployeeDAO">EmployeeDAO</a></li><li><a href="global.html#InventoryItemDAO">InventoryItemDAO</a></li><li><a href="global.html#MenuItemDAO">MenuItemDAO</a></li><li><a href="global.html#OrderComboItemDAO">OrderComboItemDAO</a></li><li><a href="global.html#OrderDAO">OrderDAO</a></li><li><a href="global.html#OrderItemDAO">OrderItemDAO</a></li><li><a href="global.html#ReportDAO">ReportDAO</a></li><li><a href="global.html#SalesDAO">SalesDAO</a></li><li><a href="global.html#checkIfOrderComplete">checkIfOrderComplete</a></li><li><a href="global.html#enforceComboRules">enforceComboRules</a></li><li><a href="global.html#generateAssistantResponse">generateAssistantResponse</a></li><li><a href="global.html#generateAudioResponse">generateAudioResponse</a></li><li><a href="global.html#getEmailRoleMap">getEmailRoleMap</a></li><li><a href="global.html#getMenuItemCategory">getMenuItemCategory</a></li><li><a href="global.html#middleware">middleware</a></li><li><a href="global.html#parseTranscription">parseTranscription</a></li><li><a href="global.html#processConversation">processConversation</a></li><li><a href="global.html#processOrder">processOrder</a></li><li><a href="global.html#startConversation">startConversation</a></li><li><a href="global.html#transcribeAudio">transcribeAudio</a></li><li><a href="global.html#verifyToken">verifyToken</a></li></ul>
+</nav>
+
+<div id="main">
+    
+    <h1 class="page-title">routes/orderRoutes.js</h1>
+    
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>// backend/routes/orderRoutes.js
+
+import express from 'express';
+const router = express.Router();
+import OrderDAO from '../dao/OrderDAO.js';
+import { verifyToken } from './authRoutes.js';
+
+/**
+ * @module orderRoutes
+ * @description Express routes for managing orders in the Panda Express POS system.
+ */
+
+/**
+ * Create a new order.
+ * @route POST /api/orders
+ * @middleware verifyToken(false)
+ * @param {object} req - The Express request object containing order data in the body.
+ * @param {object} res - The Express response object.
+ * @returns {Promise&lt;void>} Sends a JSON response containing the newly created order ID or a 500 error.
+ *
+ * @example
+ * // Example request body:
+ * {
+ *   "employeeId": 1,
+ *   "totalAmount": 29.97,
+ *   "orderItems": [
+ *     {
+ *       "menuItemId": 5,
+ *       "quantity": 2
+ *     },
+ *     {
+ *       "menuItemId": 3,
+ *       "quantity": 1
+ *     }
+ *   ]
+ * }
+ */
+router.post('/', verifyToken(false), async (req, res) => {
+  const { employeeId, totalAmount, orderItems } = req.body;
+  const order = {
+    orderId: null,
+    employeeId,
+    orderDate: new Date().toISOString(),
+    totalAmount,
+    orderItems,
+  };
+  try {
+    const orderId = await OrderDAO.createOrder(order);
+    const createdOrder = await OrderDAO.getOrderById(orderId);
+
+    createdOrder.totalAmount = parseFloat(createdOrder.totalAmount);
+
+    const io = req.app.get('io');
+
+    io.emit('new_order', createdOrder);
+    console.log('Emitted new_order event:', createdOrder.orderId);
+
+    res.status(201).json({ orderId });
+  } catch (err) {
+    console.error('Error in order creation route:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+/**
+ * Retrieve all pending orders.
+ * @route GET /api/orders/pending
+ * @middleware verifyToken(false)
+ * @param {object} req - The Express request object.
+ * @param {object} res - The Express response object.
+ * @returns {Promise&lt;void>} Sends a JSON response containing all pending orders or a 500 error.
+ */
+router.get('/pending', verifyToken(false), async (req, res) => {
+  try {
+    const pendingOrders = await OrderDAO.getPendingOrders();
+    res.json(pendingOrders);
+  } catch (err) {
+    console.error('Error fetching pending orders:', err);
+    res.status(500).json({ message: 'Server error fetching pending orders' });
+  }
+});
+
+/**
+ * Retrieve an order by its ID.
+ * @route GET /api/orders/:id
+ * @middleware verifyToken(false)
+ * @param {object} req - The Express request object containing the order ID in params.
+ * @param {object} res - The Express response object.
+ * @returns {Promise&lt;void>} Sends a JSON response containing the order or a 404 error if not found, or a 500 error.
+ *
+ * @example
+ * // Example request:
+ * // GET /api/orders/10
+ */
+router.get('/:id', verifyToken(false), async (req, res) => {
+  const orderId = parseInt(req.params.id, 10);
+  if (isNaN(orderId)) {
+    return res.status(400).json({ message: 'Invalid order ID' });
+  }
+  try {
+    const order = await OrderDAO.getOrderById(orderId);
+    if (order) {
+      res.json(order);
+    } else {
+      res.status(404).json({ message: 'Order not found' });
+    }
+  } catch (err) {
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+/**
+ * Complete an existing order.
+ * @route PATCH /api/orders/:id
+ * @middleware None
+ * @param {object} req - The Express request object containing the order ID in params.
+ * @param {object} res - The Express response object.
+ * @returns {Promise&lt;void>} Sends a JSON response containing the updated order or a 404 error if not found, or a 500 error.
+ *
+ * @example
+ * // Example request:
+ * // PATCH /api/orders/10
+ */
+router.patch('/:id', async (req, res) => {
+  const orderId = parseInt(req.params.id);
+
+  if (isNaN(orderId)) {
+    return res.status(400).json({ message: 'Invalid order ID' });
+  }
+
+  try {
+    const updatedOrder = await OrderDAO.completeOrder(orderId);
+    if (updatedOrder) {
+      const io = req.app.get('io');
+      io.emit('order_completed', { orderId: updatedOrder.order_id });
+      console.log('Emitted order_completed event for orderId:', updatedOrder.order_id);
+
+      res.json(updatedOrder);
+    } else {
+      res.status(404).json({ message: 'Order not found' });
+    }
+  } catch (err) {
+    console.error('Error completing order:', err);
+    res.status(500).json({ message: 'Server error completing order', error: err.message });
+  }
+});
+
+/**
+ * Delete an order by its ID.
+ * @route DELETE /api/orders/:id
+ * @middleware verifyToken(false)
+ * @param {object} req - The Express request object containing the order ID in params.
+ * @param {object} res - The Express response object.
+ * @returns {Promise&lt;void>} Sends a JSON response confirming deletion or a 404 error if not found, or a 500 error.
+ *
+ * @example
+ * // Example request:
+ * // DELETE /api/orders/10
+ */
+router.delete('/:id', verifyToken(false), async (req, res) => {
+  const orderId = parseInt(req.params.id, 10);
+  if (isNaN(orderId)) {
+    return res.status(400).json({ message: 'Invalid order ID' });
+  }
+  try {
+    const success = await OrderDAO.deleteOrder(orderId);
+    if (success) {
+      res.json({ message: 'Order deleted successfully' });
+    } else {
+      res.status(404).json({ message: 'Order not found' });
+    }
+  } catch (err) {
+    console.error('Error deleting order:', err);
+    res.status(500).json({ message: 'Server error deleting order' });
+  }
+});
+
+/**
+ * Retrieve orders by a specific date.
+ * @route GET /api/orders/date/:date
+ * @middleware verifyToken(false)
+ * @param {object} req - The Express request object containing the date in params.
+ * @param {object} res - The Express response object.
+ * @returns {Promise&lt;void>} Sends a JSON response containing orders for the specified date or a 500 error.
+ *
+ * @example
+ * // Example request:
+ * // GET /api/orders/date/2023-09-15
+ */
+router.get('/date/:date', verifyToken(false), async (req, res) => {
+  const { date } = req.params;
+  try {
+    const orders = await OrderDAO.getOrdersByDate(date);
+    res.json(orders);
+  } catch (err) {
+    console.error('Error fetching orders by date:', err);
+    res.status(500).json({ message: 'Server error fetching orders by date' });
+  }
+});
+
+export default router;</code></pre>
+        </article>
+    </section>
+
+
+
+
+    
+    
+</div>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.4</a> using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+</footer>
+
+<script>prettyPrint();</script>
+<script src="scripts/polyfill.js"></script>
+<script src="scripts/linenumber.js"></script>
+
+<script src="scripts/search.js" defer></script>
+
+
+<script src="scripts/collapse.js" defer></script>
+
+
+</body>
+</html>
